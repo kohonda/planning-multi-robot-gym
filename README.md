@@ -8,15 +8,29 @@ This environment simulates the movements of multiple robots in an environment wi
 
 ## Installation
 
-This package is not yet on PyPi so a local installation is required:
+##### 1. Install poetry
+https://python-poetry.org/docs/
 
-```commandline
-git clone https://github.com/riiswa/planning-multi-robot-gym
-cd planning-multi-robot-gym
-pip install -e .
+[Optional] Recommend to set venv path in project
+
+```bash
+poetry config virtualenvs.in-project true
 ```
 
+##### 2. Install via poetry
 
+```bash
+git clone https://github.com/kohonda/planning-multi-robot-gym
+cd planning-multi-robot-gym
+poetry install
+```
+
+##### 3. Activate environment and run example
+
+```bash
+poetry shell
+python example.py
+```
 
 ## Usage
 

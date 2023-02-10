@@ -1,4 +1,4 @@
-from typing import Optional, Tuple, Any, List, Dict
+from typing import Optional, Tuple, Any, List, Dict, Union
 
 import copy
 import gymnasium as gym
@@ -21,24 +21,25 @@ class PlanningMultiRobotEnv(gym.Env):
     the obstacles. The goal of the agent is to navigate the robots to the target while avoiding collisions with the
     obstacles.
     """
+
     metadata = {"render_modes": ["rgb_array", "human"], "render_fps": 30}
 
     def __init__(
-            self,
-            n_robots: int = 5,
-            n_barriers: int = 20,
-            render_mode: Optional[str] = None,
-            barrier_radius: float = 0.1,
-            robot_radius: float = 0.1,
-            wheel_blob: float = 0.04,
-            max_velocity: float = 0.5,
-            max_acceleration: float = 0.4,
-            barrier_velocity_range: float = 0.2,
-            dt: float = 0.1,
-            steps_ahead_to_plan: int = 10,
-            reach_target_reward: float = 1000.0,
-            collision_penalty: float = -500.0,
-            reset_when_target_reached: bool = False
+        self,
+        n_robots: int = 5,
+        n_barriers: int = 20,
+        render_mode: Optional[str] = None,
+        barrier_radius: float = 0.1,
+        robot_radius: float = 0.1,
+        wheel_blob: float = 0.04,
+        max_velocity: float = 0.5,
+        max_acceleration: float = 0.4,
+        barrier_velocity_range: float = 0.2,
+        dt: float = 0.1,
+        steps_ahead_to_plan: int = 10,
+        reach_target_reward: float = 1000.0,
+        collision_penalty: float = -500.0,
+        reset_when_target_reached: bool = False,
     ):
         """
         Args:
@@ -77,37 +78,52 @@ class PlanningMultiRobotEnv(gym.Env):
         self.max_acceleration = max_acceleration
         self.barrier_velocity_range = barrier_velocity_range
 
-        self.play_field_corners: Tuple[float, float, float, float] = (-4.0, -3.0, 4.0, 3.0)
+        self.play_field_corners: Tuple[float, float, float, float] = (
+            -4.0,
+            -3.0,
+            4.0,
+            3.0,
+        )
 
         assert render_mode is None or render_mode in self.metadata["render_modes"]
         self.render_mode = render_mode
 
         self.action_space = spaces.Dict(
             {
-                "vR": spaces.Box(low=-self.max_velocity, high=self.max_velocity, shape=(n_robots,), dtype=float),
-                "vL": spaces.Box(low=-self.max_velocity, high=self.max_velocity, shape=(n_robots,), dtype=float),
+                "vR": spaces.Box(
+                    low=-self.max_velocity,
+                    high=self.max_velocity,
+                    shape=(n_robots,),
+                    dtype=float,
+                ),
+                "vL": spaces.Box(
+                    low=-self.max_velocity,
+                    high=self.max_velocity,
+                    shape=(n_robots,),
+                    dtype=float,
+                ),
             }
         )
 
         self.observation_space = spaces.Dict(
             {
-                "vR": spaces.Box(low=-np.inf, high=np.inf, shape=(n_robots,), dtype=float),
-                "vL": spaces.Box(low=-np.inf, high=np.inf, shape=(n_robots,), dtype=float),
-                "theta": spaces.Box(low=-np.inf, high=np.inf, shape=(n_robots,), dtype=float),
+                "vR": spaces.Box(
+                    low=-np.inf, high=np.inf, shape=(n_robots,), dtype=float
+                ),
+                "vL": spaces.Box(
+                    low=-np.inf, high=np.inf, shape=(n_robots,), dtype=float
+                ),
+                "theta": spaces.Box(
+                    low=-np.inf, high=np.inf, shape=(n_robots,), dtype=float
+                ),
                 "robot_positions": spaces.Box(
-                    low=-np.inf,
-                    high=np.inf,
-                    shape=(n_robots, 2),
-                    dtype=float
+                    low=-np.inf, high=np.inf, shape=(n_robots, 2), dtype=float
                 ),
                 "future_target_position": spaces.Box(
                     low=-np.inf, high=np.inf, shape=(2,), dtype=float
                 ),
                 "future_obstacle_positions": spaces.Box(
-                    low=-np.inf,
-                    high=np.inf,
-                    shape=(n_barriers - 1, 2),
-                    dtype=float
+                    low=-np.inf, high=np.inf, shape=(n_barriers - 1, 2), dtype=float
                 ),
             }
         )
@@ -120,7 +136,7 @@ class PlanningMultiRobotEnv(gym.Env):
             "barrier_radius": self.barrier_radius,
             "robot_radius": self.robot_radius,
             "dt": self.dt,
-            "tau": self.tau
+            "tau": self.tau,
         }
 
         self.window = None
@@ -139,36 +155,47 @@ class PlanningMultiRobotEnv(gym.Env):
                 [barriers[self.target_index][0], barriers[self.target_index][1]]
             ),
             "future_obstacle_positions": np.array(
-                [(barrier[0], barrier[1]) for i, barrier in enumerate(barriers) if i != self.target_index]
-            )
+                [
+                    (barrier[0], barrier[1])
+                    for i, barrier in enumerate(barriers)
+                    if i != self.target_index
+                ]
+            ),
         }
 
     def reset(
-            self,
-            *,
-            seed: int | None = None,
-            options: Dict[str, Any] | None = None,
+        self,
+        *,
+        seed: Union[int, None] = None,
+        options: Union[Dict[str, Any], None] = None
     ):
         super().reset(seed=seed)
 
         self.barriers = []
         for i in range(self.n_barriers):
             barrier = [
-                self.np_random.uniform(self.play_field_corners[0], self.play_field_corners[2]),
-                self.np_random.uniform(self.play_field_corners[1], self.play_field_corners[3]),
+                self.np_random.uniform(
+                    self.play_field_corners[0], self.play_field_corners[2]
+                ),
+                self.np_random.uniform(
+                    self.play_field_corners[1], self.play_field_corners[3]
+                ),
                 self.np_random.normal(0.0, self.barrier_velocity_range),
-                self.np_random.normal(0.0, self.barrier_velocity_range)
+                self.np_random.normal(0.0, self.barrier_velocity_range),
             ]
             self.barriers.append(barrier)
 
         self.target_index = self.np_random.integers(0, self.n_barriers)
 
-        self.robots = [Robot(self.play_field_corners[0] - 0.5, -2.0 + 0.8 * i, 0.0) for i in range(self.n_robots)]
+        self.robots = [
+            Robot(self.play_field_corners[0] - 0.5, -2.0 + 0.8 * i, 0.0)
+            for i in range(self.n_robots)
+        ]
 
         return self._get_obs(), self._info
 
     def _move_barriers(self, barriers):
-        for (i, barrier) in enumerate(barriers):
+        for i, barrier in enumerate(barriers):
             barriers[i][0] += barriers[i][2] * self.dt
             if barriers[i][0] < self.play_field_corners[0]:
                 barriers[i][2] = -barriers[i][2]
@@ -201,7 +228,9 @@ class PlanningMultiRobotEnv(gym.Env):
             (cx, cy) = (x - R * math.sin(theta), y + R * math.cos(theta))
             Rabs = abs(R)
             ((tlx, tly), (Rx, Ry)) = (
-                (int(u0 + k * (cx - Rabs)), int(v0 - k * (cy + Rabs))), (int(k * (2 * Rabs)), int(k * (2 * Rabs))))
+                (int(u0 + k * (cx - Rabs)), int(v0 - k * (cy + Rabs))),
+                (int(k * (2 * Rabs)), int(k * (2 * Rabs))),
+            )
             if R > 0:
                 start_angle = theta - math.pi / 2.0
             else:
@@ -211,7 +240,7 @@ class PlanningMultiRobotEnv(gym.Env):
 
         return xnew, ynew, thetanew, path
 
-    def step(self, action: dict[str, ndarray]):
+    def step(self, action: Dict[str, ndarray]):
         assert self.action_space.contains(action)
 
         self._move_barriers(self.barriers)
@@ -221,28 +250,18 @@ class PlanningMultiRobotEnv(gym.Env):
             robot.location_history.append((robot.x, robot.y))
             vL = min(
                 max(robot.vL - self.max_acceleration * self.dt, action["vL"][i]),
-                robot.vL + self.max_acceleration * self.dt
+                robot.vL + self.max_acceleration * self.dt,
             )
             vR = min(
                 max(robot.vR - self.max_acceleration * self.dt, action["vR"][i]),
-                robot.vR + self.max_acceleration * self.dt
+                robot.vR + self.max_acceleration * self.dt,
             )
 
             (robot.x, robot.y, robot.theta, _) = self._predict_position(
-                vL,
-                vR,
-                robot.x,
-                robot.y,
-                robot.theta,
-                self.dt
+                vL, vR, robot.x, robot.y, robot.theta, self.dt
             )
             (_, _, _, robot.path) = self._predict_position(
-                vL,
-                vR,
-                robot.x,
-                robot.y,
-                robot.theta,
-                self.tau
+                vL, vR, robot.x, robot.y, robot.theta, self.tau
             )
             robot.vL = vL
             robot.vR = vR
@@ -251,9 +270,12 @@ class PlanningMultiRobotEnv(gym.Env):
 
         for robot in self.robots:
             for i, barrier in enumerate(
-                    self.barriers + [(_robot.x, _robot.y) for _robot in self.robots if _robot != robot]
+                self.barriers
+                + [(_robot.x, _robot.y) for _robot in self.robots if _robot != robot]
             ):
-                dist = math.sqrt((robot.x - barrier[0]) ** 2 + (robot.y - barrier[1]) ** 2)
+                dist = math.sqrt(
+                    (robot.x - barrier[0]) ** 2 + (robot.y - barrier[1]) ** 2
+                )
                 if dist < (self.barrier_radius + self.robot_radius):
                     if i == self.target_index:
                         robot_has_reached_target = True
@@ -266,16 +288,27 @@ class PlanningMultiRobotEnv(gym.Env):
             for robot in self.robots:
                 robot.location_history = []
 
-        return self._get_obs(), reward, self.reset_when_target_reached and robot_has_reached_target, False, self._info
+        return (
+            self._get_obs(),
+            reward,
+            self.reset_when_target_reached and robot_has_reached_target,
+            False,
+            self._info,
+        )
 
     def _draw_barriers(self, screen):
-        for (i, barrier) in enumerate(self.barriers):
+        for i, barrier in enumerate(self.barriers):
             if i == self.target_index:
                 bcol = red
             else:
                 bcol = lightblue
-            pygame.draw.circle(screen, bcol, (int(u0 + k * barrier[0]), int(v0 - k * barrier[1])),
-                               int(k * self.barrier_radius), 0)
+            pygame.draw.circle(
+                screen,
+                bcol,
+                (int(u0 + k * barrier[0]), int(v0 - k * barrier[1])),
+                int(k * self.barrier_radius),
+                0,
+            )
 
     def render(self) -> Optional[ndarray]:
         if self.render_mode:
@@ -291,7 +324,9 @@ class PlanningMultiRobotEnv(gym.Env):
 
             for robot in self.robots:
                 for loc in robot.location_history:
-                    pygame.draw.circle(canvas, grey, (int(u0 + k * loc[0]), int(v0 - k * loc[1])), 3, 0)
+                    pygame.draw.circle(
+                        canvas, grey, (int(u0 + k * loc[0]), int(v0 - k * loc[1])), 3, 0
+                    )
 
             self._draw_barriers(canvas)
 

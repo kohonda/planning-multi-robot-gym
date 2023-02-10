@@ -1,0 +1,22 @@
+[tool.poetry]
+name = "planning-multi-robot-gym"
+version = "0.1.0"
+description = ""
+authors = ["kohonda <0905honda@gmail.com>"]
+license = "MIT"
+readme = "README.md"
+packages = [{include = "planning_multi_robot_gym"}]
+
+[tool.poetry.dependencies]
+python = "^3.8.1"
+gymnasium = "^0.27.1"
+black = "^23.1.0"
+pygame = "^2.1.2"
+
+
+[tool.poetry.group.dev.dependencies]
+flake8 = "^6.0.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

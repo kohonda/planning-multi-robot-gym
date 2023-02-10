@@ -15,7 +15,6 @@ class Robot:
         self.location_history = []
 
     def draw(self, screen: pygame.Surface, robot_radius: float, wheel_blob: float):
-
         robot_width = 2 * robot_radius
         u = u0 + k * self.x
         v = v0 - k * self.y
@@ -37,8 +36,10 @@ class Robot:
             if self.path[0] == 0:
                 straight_path = self.path[1]
                 line_start = (u0 + k * self.x, v0 - k * self.y)
-                line_end = (u0 + k * (self.x + straight_path * math.cos(self.theta)),
-                            v0 - k * (self.y + straight_path * math.sin(self.theta)))
+                line_end = (
+                    u0 + k * (self.x + straight_path * math.cos(self.theta)),
+                    v0 - k * (self.y + straight_path * math.sin(self.theta)),
+                )
                 pygame.draw.line(screen, (0, 200, 0), line_start, line_end, 1)
             if self.path[0] == 2:
                 if self.path[3] > self.path[2]:
@@ -50,5 +51,11 @@ class Robot:
                 if start_angle < 0:
                     start_angle += 2 * math.pi
                     stop_angle += 2 * math.pi
-                if self.path[1][1][0] > 0 and self.path[1][0][0] > 0 and self.path[1][1][1] > 1:
-                    pygame.draw.arc(screen, (0, 200, 0), self.path[1], start_angle, stop_angle, 1)
+                if (
+                    self.path[1][1][0] > 0
+                    and self.path[1][0][0] > 0
+                    and self.path[1][1][1] > 1
+                ):
+                    pygame.draw.arc(
+                        screen, (0, 200, 0), self.path[1], start_angle, stop_angle, 1
+                    )
