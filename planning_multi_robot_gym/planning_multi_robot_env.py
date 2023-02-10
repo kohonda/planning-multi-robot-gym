@@ -5,10 +5,11 @@ import gymnasium as gym
 import math
 import numpy as np
 import pygame
+import os
+import yaml
 from gymnasium import spaces
 from numpy import ndarray
 
-from planning_multi_robot_gym.graphics_constants import *
 from planning_multi_robot_gym.robot import Robot
 
 
@@ -40,6 +41,7 @@ class PlanningMultiRobotEnv(gym.Env):
         reach_target_reward: float = 1000.0,
         collision_penalty: float = -500.0,
         reset_when_target_reached: bool = False,
+        graphics_config: Dict = None,
     ):
         """
         Args:
@@ -77,6 +79,25 @@ class PlanningMultiRobotEnv(gym.Env):
         self.max_velocity = max_velocity
         self.max_acceleration = max_acceleration
         self.barrier_velocity_range = barrier_velocity_range
+
+        # load graphics config
+        if graphics_config is None:
+            # Default graphics config
+            path = os.path.join(os.path.dirname(__file__), "graphics_config.yaml")
+            graphics_config = yaml.safe_load(open(path, "r"))
+        else:
+            if not isinstance(graphics_config, Dict):
+                raise ValueError("graphics_config must be a dictionary")
+        self.window_size = graphics_config["window_size"]
+        self.center = [self.window_size[0] / 2, self.window_size[1] / 2]
+        self.black = graphics_config["black"]
+        self.lightblue = graphics_config["lightblue"]
+        self.darkblue = graphics_config["darkblue"]
+        self.red = graphics_config["red"]
+        self.white = graphics_config["white"]
+        self.blue = graphics_config["blue"]
+        self.grey = graphics_config["grey"]
+        self.k = graphics_config["k"]
 
         self.play_field_corners: Tuple[float, float, float, float] = (
             -4.0,
@@ -228,8 +249,8 @@ class PlanningMultiRobotEnv(gym.Env):
             (cx, cy) = (x - R * math.sin(theta), y + R * math.cos(theta))
             Rabs = abs(R)
             ((tlx, tly), (Rx, Ry)) = (
-                (int(u0 + k * (cx - Rabs)), int(v0 - k * (cy + Rabs))),
-                (int(k * (2 * Rabs)), int(k * (2 * Rabs))),
+                (int(self.center[0] + self.k * (cx - Rabs)), int(self.center[1] - self.k * (cy + Rabs))),
+                (int(self.k * (2 * Rabs)), int(self.k * (2 * Rabs))),
             )
             if R > 0:
                 start_angle = theta - math.pi / 2.0
@@ -299,14 +320,14 @@ class PlanningMultiRobotEnv(gym.Env):
     def _draw_barriers(self, screen):
         for i, barrier in enumerate(self.barriers):
             if i == self.target_index:
-                bcol = red
+                bcol = self.red
             else:
-                bcol = lightblue
+                bcol = self.lightblue
             pygame.draw.circle(
                 screen,
                 bcol,
-                (int(u0 + k * barrier[0]), int(v0 - k * barrier[1])),
-                int(k * self.barrier_radius),
+                (int(self.center[0] + self.k * barrier[0]), int(self.center[1] - self.k * barrier[1])),
+                int(self.k * self.barrier_radius),
                 0,
             )
 
@@ -315,17 +336,21 @@ class PlanningMultiRobotEnv(gym.Env):
             if self.window is None and self.render_mode == "human":
                 pygame.init()
                 pygame.display.init()
-                self.window = pygame.display.set_mode(size)
+                self.window = pygame.display.set_mode(self.window_size)
             if self.clock is None and self.render_mode == "human":
                 self.clock = pygame.time.Clock()
 
-            canvas = pygame.Surface(size)
-            canvas.fill(black)
+            canvas = pygame.Surface(self.window_size)
+            canvas.fill(self.black)
 
             for robot in self.robots:
                 for loc in robot.location_history:
                     pygame.draw.circle(
-                        canvas, grey, (int(u0 + k * loc[0]), int(v0 - k * loc[1])), 3, 0
+                        surface=canvas,
+                        color=self.grey,
+                        center=(int(self.center[0] + self.k * loc[0]), int(self.center[1] - self.k * loc[1])),
+                        radius=3,
+                        width=0
                     )
 
             self._draw_barriers(canvas)
