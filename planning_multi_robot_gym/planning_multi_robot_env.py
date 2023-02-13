@@ -7,6 +7,7 @@ import numpy as np
 import pygame
 import os
 import yaml
+from collections import namedtuple
 from gymnasium import spaces
 from numpy import ndarray
 
@@ -18,7 +19,7 @@ class PlanningMultiRobotEnv(gym.Env):
 
     This environment simulates the movements of multiple robots in an environment with barriers and a target. The robots
     are controlled by the actions given by an agent. The observations received by the agent includes information about
-    the position, velocity and orientation of each robot, the future position of the target and the future positio of
+    the position, velocity and orientation of each robot, the future position of the target and the future position of
     the obstacles. The goal of the agent is to navigate the robots to the target while avoiding collisions with the
     obstacles.
     """
@@ -41,7 +42,7 @@ class PlanningMultiRobotEnv(gym.Env):
         reach_target_reward: float = 1000.0,
         collision_penalty: float = -500.0,
         reset_when_target_reached: bool = False,
-        graphics_config: Dict = None,
+        config: Dict = None,
     ):
         """
         Args:
@@ -60,6 +61,7 @@ class PlanningMultiRobotEnv(gym.Env):
             collision_penalty (float): The penalty given when a robot collides with a barrier or another robot.
             reset_when_target_reached (bool): A flag indicating whether the environment should reset when a robot
                 reaches the target.
+            config (dict): The graphics configuration of the environment.
         """
         self.robots: List[Robot] = []
         self.target_index = None
@@ -81,23 +83,22 @@ class PlanningMultiRobotEnv(gym.Env):
         self.barrier_velocity_range = barrier_velocity_range
 
         # load graphics config
-        if graphics_config is None:
+        if config is None:
             # Default graphics config
-            path = os.path.join(os.path.dirname(__file__), "graphics_config.yaml")
-            graphics_config = yaml.safe_load(open(path, "r"))
+            path = os.path.join(os.path.dirname(__file__), "config.yaml")
+            config = yaml.safe_load(open(path, "r"))
         else:
-            if not isinstance(graphics_config, Dict):
-                raise ValueError("graphics_config must be a dictionary")
-        self.window_size = graphics_config["window_size"]
-        self.center = [self.window_size[0] / 2, self.window_size[1] / 2]
-        self.black = graphics_config["black"]
-        self.lightblue = graphics_config["lightblue"]
-        self.darkblue = graphics_config["darkblue"]
-        self.red = graphics_config["red"]
-        self.white = graphics_config["white"]
-        self.blue = graphics_config["blue"]
-        self.grey = graphics_config["grey"]
-        self.k = graphics_config["k"]
+            if not isinstance(config, Dict):
+                raise ValueError("config must be a dictionary")
+
+        graphics_config = config["graphics"]
+        graphics_config["center"] = [
+            graphics_config["window_width"] / 2,
+            graphics_config["window_height"] / 2,
+        ]
+
+        GraphicConfig = namedtuple("GraphicConfig", graphics_config.keys())
+        self.graphics = GraphicConfig(**graphics_config)
 
         self.play_field_corners: Tuple[float, float, float, float] = (
             -4.0,
@@ -163,7 +164,7 @@ class PlanningMultiRobotEnv(gym.Env):
         self.window = None
         self.clock = None
 
-    def _get_obs(self) -> Dict[str, ndarray]:
+    def _get_obs(self) -> Dict[str, np.ndarray]:
         barriers = copy.deepcopy(self.barriers)
         for _ in range(self.steps_ahead_to_plan):
             self._move_barriers(barriers)
@@ -209,7 +210,12 @@ class PlanningMultiRobotEnv(gym.Env):
         self.target_index = self.np_random.integers(0, self.n_barriers)
 
         self.robots = [
-            Robot(self.play_field_corners[0] - 0.5, -2.0 + 0.8 * i, 0.0)
+            Robot(
+                x=self.play_field_corners[0] - 0.5,
+                y=-2.0 + 0.8 * i,
+                theta=0.0,
+                graphics=self.graphics,
+            )
             for i in range(self.n_robots)
         ]
 
@@ -249,8 +255,14 @@ class PlanningMultiRobotEnv(gym.Env):
             (cx, cy) = (x - R * math.sin(theta), y + R * math.cos(theta))
             Rabs = abs(R)
             ((tlx, tly), (Rx, Ry)) = (
-                (int(self.center[0] + self.k * (cx - Rabs)), int(self.center[1] - self.k * (cy + Rabs))),
-                (int(self.k * (2 * Rabs)), int(self.k * (2 * Rabs))),
+                (
+                    int(self.graphics.center[0] + self.graphics.scale * (cx - Rabs)),
+                    int(self.graphics.center[1] - self.graphics.scale * (cy + Rabs)),
+                ),
+                (
+                    int(self.graphics.scale * (2 * Rabs)),
+                    int(self.graphics.scale * (2 * Rabs)),
+                ),
             )
             if R > 0:
                 start_angle = theta - math.pi / 2.0
@@ -309,25 +321,32 @@ class PlanningMultiRobotEnv(gym.Env):
             for robot in self.robots:
                 robot.location_history = []
 
+        observation = self._get_obs()
+        terminated = self.reset_when_target_reached and robot_has_reached_target
+        truncated = False  # No time limit
+
         return (
-            self._get_obs(),
+            observation,
             reward,
-            self.reset_when_target_reached and robot_has_reached_target,
-            False,
+            terminated,
+            truncated,
             self._info,
         )
 
     def _draw_barriers(self, screen):
         for i, barrier in enumerate(self.barriers):
             if i == self.target_index:
-                bcol = self.red
+                bcol = self.graphics.red
             else:
-                bcol = self.lightblue
+                bcol = self.graphics.lightblue
             pygame.draw.circle(
                 screen,
                 bcol,
-                (int(self.center[0] + self.k * barrier[0]), int(self.center[1] - self.k * barrier[1])),
-                int(self.k * self.barrier_radius),
+                (
+                    int(self.graphics.center[0] + self.graphics.scale * barrier[0]),
+                    int(self.graphics.center[1] - self.graphics.scale * barrier[1]),
+                ),
+                int(self.graphics.scale * self.barrier_radius),
                 0,
             )
 
@@ -336,21 +355,28 @@ class PlanningMultiRobotEnv(gym.Env):
             if self.window is None and self.render_mode == "human":
                 pygame.init()
                 pygame.display.init()
-                self.window = pygame.display.set_mode(self.window_size)
+                self.window = pygame.display.set_mode(
+                    (self.graphics.window_width, self.graphics.window_height)
+                )
             if self.clock is None and self.render_mode == "human":
                 self.clock = pygame.time.Clock()
 
-            canvas = pygame.Surface(self.window_size)
-            canvas.fill(self.black)
+            canvas = pygame.Surface(
+                (self.graphics.window_width, self.graphics.window_height)
+            )
+            canvas.fill(self.graphics.black)
 
             for robot in self.robots:
                 for loc in robot.location_history:
                     pygame.draw.circle(
                         surface=canvas,
-                        color=self.grey,
-                        center=(int(self.center[0] + self.k * loc[0]), int(self.center[1] - self.k * loc[1])),
+                        color=self.graphics.grey,
+                        center=(
+                            int(self.graphics.center[0] + self.graphics.scale * loc[0]),
+                            int(self.graphics.center[1] - self.graphics.scale * loc[1]),
+                        ),
                         radius=3,
-                        width=0
+                        width=0,
                     )
 
             self._draw_barriers(canvas)

@@ -1,23 +1,10 @@
+from typing import NamedTuple
 import math
 import pygame
 
-# TODO: move these to a config
-WIDTH = 1500
-HEIGHT = 1000
-size = [WIDTH, HEIGHT]
-black = (20, 20, 40)
-lightblue = (0, 120, 255)
-darkblue = (0, 40, 160)
-red = (255, 100, 0)
-white = (255, 255, 255)
-blue = (0, 0, 255)
-grey = (70, 70, 70)
-k = 160
-u0 = WIDTH / 2
-v0 = HEIGHT / 2
 
 class Robot:
-    def __init__(self, x: float, y, theta: float):
+    def __init__(self, x: float, y, theta: float, graphics: NamedTuple):
         self.x = x
         self.y = y
         self.theta = theta
@@ -25,32 +12,56 @@ class Robot:
         self.vR = 0.0
         self.path = None
         self.location_history = []
+        self.graphics = graphics
 
     def draw(self, screen: pygame.Surface, robot_radius: float, wheel_blob: float):
         robot_width = 2 * robot_radius
-        u = u0 + k * self.x
-        v = v0 - k * self.y
-        pygame.draw.circle(screen, white, (int(u), int(v)), int(k * robot_radius), 3)
+        u = self.graphics.center[0] + self.graphics.scale * self.x
+        v = self.graphics.center[1] - self.graphics.scale * self.y
+        pygame.draw.circle(
+            screen,
+            self.graphics.white,
+            (int(u), int(v)),
+            int(self.graphics.scale * robot_radius),
+            3,
+        )
 
         wlx = self.x - (robot_width / 2.0) * math.sin(self.theta)
         wly = self.y + (robot_width / 2.0) * math.cos(self.theta)
-        ulx = u0 + k * wlx
-        vlx = v0 - k * wly
-        pygame.draw.circle(screen, blue, (int(ulx), int(vlx)), int(k * wheel_blob))
+        ulx = self.graphics.center[0] + self.graphics.scale * wlx
+        vlx = self.graphics.center[1] - self.graphics.scale * wly
+        pygame.draw.circle(
+            screen,
+            self.graphics.blue,
+            (int(ulx), int(vlx)),
+            int(self.graphics.scale * wheel_blob),
+        )
 
         wrx = self.x + (robot_width / 2.0) * math.sin(self.theta)
         wry = self.y - (robot_width / 2.0) * math.cos(self.theta)
-        urx = u0 + k * wrx
-        vrx = v0 - k * wry
-        pygame.draw.circle(screen, blue, (int(urx), int(vrx)), int(k * wheel_blob))
+        urx = self.graphics.center[0] + self.graphics.scale * wrx
+        vrx = self.graphics.center[1] - self.graphics.scale * wry
+        pygame.draw.circle(
+            screen,
+            self.graphics.blue,
+            (int(urx), int(vrx)),
+            int(self.graphics.scale * wheel_blob),
+        )
 
         if self.path is not None:
             if self.path[0] == 0:
                 straight_path = self.path[1]
-                line_start = (u0 + k * self.x, v0 - k * self.y)
+                line_start = (
+                    self.graphics.center[0] + self.graphics.scale * self.x,
+                    self.graphics.center[1] - self.graphics.scale * self.y,
+                )
                 line_end = (
-                    u0 + k * (self.x + straight_path * math.cos(self.theta)),
-                    v0 - k * (self.y + straight_path * math.sin(self.theta)),
+                    self.graphics.center[0]
+                    + self.graphics.scale
+                    * (self.x + straight_path * math.cos(self.theta)),
+                    self.graphics.center[1]
+                    - self.graphics.scale
+                    * (self.y + straight_path * math.sin(self.theta)),
                 )
                 pygame.draw.line(screen, (0, 200, 0), line_start, line_end, 1)
             if self.path[0] == 2:
