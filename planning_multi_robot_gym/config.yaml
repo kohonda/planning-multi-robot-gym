@@ -1,9 +1,16 @@
 # Settings of the playground
 
+play_field:
+  min_x: -4.0 # meters
+  max_x: 4.0 # meters
+  min_y: -3.0 # meters
+  max_y: 3.0 # meters
+
 graphics:
   window_width: 1500 # pixels
   window_height: 1000 # pixels
   scale: 160 # pixels per meter
+  # colors
   black: [20, 20, 40]
   lightblue: [0, 120, 255]
   darkblue: [0, 40, 160]

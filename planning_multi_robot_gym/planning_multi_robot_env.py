@@ -100,12 +100,15 @@ class PlanningMultiRobotEnv(gym.Env):
         GraphicConfig = namedtuple("GraphicConfig", graphics_config.keys())
         self.graphics = GraphicConfig(**graphics_config)
 
-        self.play_field_corners: Tuple[float, float, float, float] = (
-            -4.0,
-            -3.0,
-            4.0,
-            3.0,
-        )
+        play_field_config = config["play_field"]
+        PlayField = namedtuple("PlayField", play_field_config.keys())
+        self.play_field = PlayField(**play_field_config)
+        # self.play_field_corners: Tuple[float, float, float, float] = (
+        #     play_field_config["min_x"],
+        #     play_field_config["min_y"],
+        #     play_field_config["max_x"],
+        #     play_field_config["max_y"],
+        # )
 
         assert render_mode is None or render_mode in self.metadata["render_modes"]
         self.render_mode = render_mode
@@ -193,25 +196,26 @@ class PlanningMultiRobotEnv(gym.Env):
     ):
         super().reset(seed=seed)
 
-        self.barriers = []
+        barriers_list = []
         for i in range(self.n_barriers):
             barrier = [
                 self.np_random.uniform(
-                    self.play_field_corners[0], self.play_field_corners[2]
+                    self.play_field.min_x, self.play_field.max_x
                 ),
                 self.np_random.uniform(
-                    self.play_field_corners[1], self.play_field_corners[3]
+                    self.play_field.min_y, self.play_field.max_y
                 ),
                 self.np_random.normal(0.0, self.barrier_velocity_range),
                 self.np_random.normal(0.0, self.barrier_velocity_range),
             ]
-            self.barriers.append(barrier)
+            barriers_list.append(barrier)
+        self.barriers = np.array(barriers_list)
 
         self.target_index = self.np_random.integers(0, self.n_barriers)
 
         self.robots = [
             Robot(
-                x=self.play_field_corners[0] - 0.5,
+                x=self.play_field.min_x - 0.5,
                 y=-2.0 + 0.8 * i,
                 theta=0.0,
                 graphics=self.graphics,
@@ -221,18 +225,22 @@ class PlanningMultiRobotEnv(gym.Env):
 
         return self._get_obs(), self._info
 
-    def _move_barriers(self, barriers):
-        for i, barrier in enumerate(barriers):
-            barriers[i][0] += barriers[i][2] * self.dt
-            if barriers[i][0] < self.play_field_corners[0]:
-                barriers[i][2] = -barriers[i][2]
-            if barriers[i][0] > self.play_field_corners[2]:
-                barriers[i][2] = -barriers[i][2]
-            barriers[i][1] += barriers[i][3] * self.dt
-            if barriers[i][1] < self.play_field_corners[1]:
-                barriers[i][3] = -barriers[i][3]
-            if barriers[i][1] > self.play_field_corners[3]:
-                barriers[i][3] = -barriers[i][3]
+    def _move_barriers(self, barriers) -> None:        
+        # update obstacles positions
+        barriers[:, 0] += barriers[:, 2] * self.dt
+        barriers[:, 1] += barriers[:, 3] * self.dt
+        
+        # if obstacles hit the walls, change direction
+        barriers[:, 2] = np.where(
+            (barriers[:, 0] < self.play_field.min_x) | (barriers[:, 0] > self.play_field.max_x),
+            -barriers[:, 2],
+            barriers[:, 2]
+        )
+        barriers[:, 3] = np.where(
+            (barriers[:, 1] < self.play_field.min_y) | (barriers[:, 1] > self.play_field.max_y),
+            -barriers[:, 3],
+            barriers[:, 3]
+        )
 
     def _predict_position(self, vL, vR, x, y, theta, deltat):
         if round(vL, 3) == round(vR, 3):
@@ -300,21 +308,19 @@ class PlanningMultiRobotEnv(gym.Env):
             robot.vR = vR
 
         robot_has_reached_target = False
-
+        
+        # check for collisions and reach target
         for robot in self.robots:
-            for i, barrier in enumerate(
-                self.barriers
-                + [(_robot.x, _robot.y) for _robot in self.robots if _robot != robot]
-            ):
-                dist = math.sqrt(
-                    (robot.x - barrier[0]) ** 2 + (robot.y - barrier[1]) ** 2
-                )
-                if dist < (self.barrier_radius + self.robot_radius):
-                    if i == self.target_index:
-                        robot_has_reached_target = True
-                        reward += self.reach_target_reward
-                    else:
-                        reward += self.collision_penalty
+            # calculate distances to all barriers
+            dists = np.sqrt((robot.x - self.barriers[:, 0]) ** 2 + (robot.y - self.barriers[:, 1]) ** 2)
+            # get indices of barriers that collide with the robot
+            collision_indices = np.where(dists < (self.barrier_radius + self.robot_radius))[0]
+            if self.target_index in collision_indices:
+                robot_has_reached_target = True
+                reward += self.reach_target_reward
+            else:
+                reward += self.collision_penalty
+
         if robot_has_reached_target:
             self.target_index = self.np_random.integers(0, self.n_barriers)
 
